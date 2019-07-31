@@ -1,0 +1,97 @@
+---
+title: 'Peer-graded Assignment: Prediction Assignment Writeup'
+author: "Shannah Aberin"
+date: "July 31, 2019"
+output: html_document
+---
+
+##Load Necessary Libraries
+```{r}
+library(caret)
+library(rpart)
+library(rpart.plot)
+library(RColorBrewer)
+library(rattle)
+library(randomForest)
+library(ggcorrplot)
+```
+##Load and Save data set as training and test set and explore the datasets
+```{r}
+train_in <- read.csv('./pml-training.csv', header=T)
+valid_in <- read.csv('./pml-testing.csv', header=T)
+dim(train_in)
+```
+##Impute the missing values to 0s and split the train set to training and validation set
+```{r}
+trainData<- train_in[, colSums(is.na(train_in)) == 0]
+validData <- valid_in[, colSums(is.na(valid_in)) == 0]
+dim(trainData)
+```
+##Drop unneeded variables
+```{r}
+trainData <- trainData[, -c(1:7)]
+validData <- validData[, -c(1:7)]
+dim(trainData)
+
+```
+##Prepare the training data set by partitioning it 
+####70(train)/30(validation)before training the model
+```{r}
+set.seed(1234) 
+inTrain <- createDataPartition(trainData$classe, p = 0.7, list = FALSE)
+trainData <- trainData[inTrain, ]
+testData <- trainData[-inTrain, ]
+dim(trainData)
+
+```
+##Remove variables that have near zero variance
+```{r}
+zeros <- nearZeroVar(trainData)
+trainData <- trainData[, -zeros]
+testData  <- testData[, -zeros]
+dim(trainData)
+```
+##Visualize the correlation of each variable using corrplot
+```{r}
+cor_mat <- cor(trainData[, -53])
+ggcorrplot(cor_mat,  type = "upper", hc.order = TRUE, colors = brewer.pal(n = 3, name = "RdYlBu"))
+```
+
+##Model development of decision tree to for prediction using fancyRplot
+```{r}
+set.seed(12345)
+decisionTreeMod1 <- rpart(classe ~ ., data=trainData, method="class")
+fancyRpartPlot(decisionTreeMod1)
+```
+##Time to Predict!!!
+```{r}
+predictTreeMod1 <- predict(decisionTreeMod1, testData, type = "class")
+```
+##Display the confusion matrix of the results of the model to 
+#identify the ratio of true positive and true negatives
+```{r}
+cmtree <- confusionMatrix(predictTreeMod1, testData$classe)
+cmtree
+```
+## plot matrix results
+```{r}
+plot(cmtree$table, col = cmtree$byClass, 
+     main = paste("Decision Tree - Accuracy =", round(cmtree$overall['Accuracy'], 4)))
+```
+##Time to predict with Random Forest Model and 
+###used cross validation with 3 folds dor training the Random Forest Model
+```{r}
+controlRF <- trainControl(method="cv", number=3, verboseIter=FALSE)
+modRF1 <- train(classe ~ ., data=trainData, method="rf", trControl=controlRF)
+modRF1$finalModel
+predictRF1 <- predict(modRF1, newdata=testData)
+cmrf <- confusionMatrix(predictRF1, testData$classe)
+cmrf
+plot(modRF1)
+```
+#Use the best model for the test set
+```{r}
+Results <- predict(modRF1, newdata=validData)
+Results
+```
+
